@@ -210,7 +210,7 @@ let API = ''; try{ API=localStorage.getItem('isla_api')||''; }catch(e){}
 let state = defaultState();
 function defaultState(){ return {nombre:'',pin:'',money:0,moneyEarned:0,lastDay:'',lastDiaryDay:'',streak:0,rates:{registro:20,racha:10,lectura:15,acierto:5,diario:20},payments:[],learnDone:{},entries:[],emociones:DEFAULT_EMOS.map(e=>({...e})),lessons:[],diario:[],notas:[]}; }
 function normalize(s){ const d=defaultState(); s=s||{};
-  return {nombre:s.nombre||'',pin:s.pin||'',money:+s.money||0,moneyEarned:+s.moneyEarned||0,lastDay:s.lastDay||'',lastDiaryDay:s.lastDiaryDay||'',streak:+s.streak||0,
+  return {nombre:s.nombre||'',pin:(s.pin==null?'':String(s.pin)),money:+s.money||0,moneyEarned:+s.moneyEarned||0,lastDay:s.lastDay||'',lastDiaryDay:s.lastDiaryDay||'',streak:+s.streak||0,
     rates:Object.assign({...d.rates},s.rates||{}),payments:Array.isArray(s.payments)?s.payments:[],learnDone:s.learnDone||{},
     entries:Array.isArray(s.entries)?s.entries:[],emociones:(Array.isArray(s.emociones)&&s.emociones.length)?s.emociones:d.emociones,
     lessons:Array.isArray(s.lessons)?s.lessons:[],diario:Array.isArray(s.diario)?s.diario:[],
@@ -490,7 +490,7 @@ function renderPin(){
 }
 function pinDots(){ document.querySelectorAll('#pin_dots span').forEach((d,i)=>d.classList.toggle('on',i<pinBuf.length)); }
 function pinPress(n){ if(pinBuf.length>=4)return; pinBuf+=n; pinDots();
-  if(pinBuf.length===4){ setTimeout(()=>{ if(!state.pin){state.pin=pinBuf;pushConfig();toast('PIN creado');go('parent');} else if(pinBuf===state.pin){go('parent');} else {toast('PIN incorrecto');pinBuf='';pinDots();} },150); } }
+  if(pinBuf.length===4){ setTimeout(()=>{ if(!state.pin){state.pin=pinBuf;pushConfig();toast('PIN creado');go('parent');} else if(pinBuf===String(state.pin)){go('parent');} else {toast('PIN incorrecto');pinBuf='';pinDots();} },150); } }
 function pinDel(){ pinBuf=pinBuf.slice(0,-1); pinDots(); }
 
 /* ================= PARENT ================= */
