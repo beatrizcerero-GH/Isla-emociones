@@ -9,6 +9,12 @@
 <meta name="theme-color" content="#2F6F6D">
 <title>Isla de las Emociones</title>
 <meta name="description" content="Diario de emociones sincronizado con Google Sheets: registra, aprende e identifica emociones desde cualquier dispositivo.">
+<!-- PWA: permite "Instalar aplicación" / "Añadir a pantalla de inicio".
+     Estos 4 archivos deben estar en la MISMA carpeta que index.html en GitHub:
+     manifest.webmanifest, sw.js, icon-192.png, icon-512.png -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <style>
   :root{
     color-scheme: light;
@@ -209,9 +215,9 @@ const LOGO_PDF='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAADICAYAAACtWK
 /* ---------- conexión ---------- */
 let API = ''; try{ API=localStorage.getItem('isla_api')||''; }catch(e){}
 let state = defaultState();
-function defaultState(){ return {nombre:'',pin:'',money:0,moneyEarned:0,lastDay:'',lastDiaryDay:'',streak:0,lastVisit:'',visitConclusions:'',visits:[],rates:{registro:20,racha:10,lectura:15,acierto:5,diario:20},payments:[],learnDone:{},entries:[],emociones:DEFAULT_EMOS.map(e=>({...e})),lessons:[],diario:[],notas:[]}; }
+function defaultState(){ return {nombre:'',pin:'',money:0,moneyEarned:0,lastDay:'',lastDiaryDay:'',streak:0,lastVisit:'',rates:{registro:20,racha:10,lectura:15,acierto:5,diario:20},payments:[],learnDone:{},entries:[],emociones:DEFAULT_EMOS.map(e=>({...e})),lessons:[],diario:[],notas:[]}; }
 function normalize(s){ const d=defaultState(); s=s||{};
-  return {nombre:s.nombre||'',pin:(s.pin==null?'':String(s.pin)),money:+s.money||0,moneyEarned:+s.moneyEarned||0,lastDay:s.lastDay||'',lastDiaryDay:s.lastDiaryDay||'',streak:+s.streak||0,lastVisit:s.lastVisit||'',visitConclusions:s.visitConclusions||'',visits:Array.isArray(s.visits)?s.visits:[],
+  return {nombre:s.nombre||'',pin:(s.pin==null?'':String(s.pin)),money:+s.money||0,moneyEarned:+s.moneyEarned||0,lastDay:s.lastDay||'',lastDiaryDay:s.lastDiaryDay||'',streak:+s.streak||0,lastVisit:s.lastVisit||'',
     rates:Object.assign({...d.rates},s.rates||{}),payments:Array.isArray(s.payments)?s.payments:[],learnDone:s.learnDone||{},
     entries:Array.isArray(s.entries)?s.entries:[],emociones:(Array.isArray(s.emociones)&&s.emociones.length)?s.emociones:d.emociones,
     lessons:Array.isArray(s.lessons)?s.lessons:[],diario:Array.isArray(s.diario)?s.diario:[],
@@ -223,7 +229,7 @@ async function api(action,data){
   const j=await r.json(); if(!j.ok)throw new Error(j.error||'error'); return j;
 }
 function cacheState(){ try{ localStorage.setItem('isla_cache',JSON.stringify(state)); }catch(e){} }
-function cfgFields(){ return {nombre:state.nombre,pin:state.pin,money:state.money,moneyEarned:state.moneyEarned,lastDay:state.lastDay,lastDiaryDay:state.lastDiaryDay,streak:state.streak,lastVisit:state.lastVisit,visitConclusions:state.visitConclusions,visits:state.visits,rates:state.rates,payments:state.payments,learnDone:state.learnDone}; }
+function cfgFields(){ return {nombre:state.nombre,pin:state.pin,money:state.money,moneyEarned:state.moneyEarned,lastDay:state.lastDay,lastDiaryDay:state.lastDiaryDay,streak:state.streak,lastVisit:state.lastVisit,rates:state.rates,payments:state.payments,learnDone:state.learnDone}; }
 async function pushConfig(){ cacheState(); try{ await api('saveConfig',cfgFields()); }catch(e){ toast('Sin conexión: no se sincronizó'); } }
 async function pushEmociones(){ cacheState(); try{ await api('saveEmociones',state.emociones); }catch(e){ toast('Sin conexión: no se sincronizó'); } }
 async function pushLecciones(){ cacheState(); try{ await api('saveLecciones',state.lessons); }catch(e){ toast('Sin conexión: no se sincronizó'); } }
@@ -527,7 +533,6 @@ function reportHTML(){
   var pend=pendingNotas();
   var regs=visitEntries();
   var dia=visitDiario();
-  var hist=Array.isArray(state.visits)?state.visits:[];
   var notasBlock = pend.length
     ? pend.slice().reverse().map(function(n){ return '<div class="entry"><div class="det" style="white-space:pre-wrap">'+esc(n.text)+'</div></div>'; }).join('')
     : '<div class="callout">No hay notas de los padres para esta visita.</div>';
@@ -537,27 +542,19 @@ function reportHTML(){
   var diaBlock = dia.length
     ? dia.map(function(d){ return '<div class="entry"><div class="when">'+fmtDateTime(d.ts)+'</div><div class="det" style="white-space:pre-wrap">'+esc(d.text)+'</div></div>'; }).join('')
     : '<div class="callout">El niño no ha escrito nada en el diario en este periodo.</div>';
-  var histBlock = hist.length
-    ? hist.map(function(v,i){ return '<div class="entry"><div class="when">Visita del '+fmtDMY(v.fecha)+'</div>'
-        + (v.conclusiones&&v.conclusiones.trim()? '<div class="det" style="white-space:pre-wrap">'+esc(v.conclusiones)+'</div>' : '<div class="det" style="color:var(--ink-soft)">Sin conclusiones guardadas.</div>')
-        + '<div class="row" style="margin-top:8px"><button class="btn btn-ghost btn-sm" onclick="reprintVisit('+i+')">⬇️ Informe completo</button></div></div>'; }).join('')
-    : '<div class="callout">Aún no hay visitas guardadas. Cuando pulses “Marcar visita como hecha”, aparecerán aquí.</div>';
   return '<div class="report"><h2>Informe para la visita</h2>'
     + '<div class="sub">'+(esc(state.nombre)||'—')+'</div>'
     + '<div class="field" style="margin-top:6px"><label for="visitDate">Fecha de la visita con Mamen</label>'
     + '<input type="date" id="visitDate" value="'+visitInputVal()+'" onchange="setVisitDate(this.value)"></div>'
-    + '<div class="field"><label for="visitConcl">Conclusiones de la sesión (Mamen)</label>'
-    + '<textarea id="visitConcl" rows="4" placeholder="Después de la sesión, escribe aquí lo que ha comentado Mamen. Puedes dictarlo con el micrófono 🎤 del teclado." oninput="state.visitConclusions=this.value">'+esc(state.visitConclusions||'')+'</textarea></div>'
-    + '<div class="row" style="margin-top:0"><button class="btn btn-ghost" onclick="saveVisitConcl()">💾 Guardar conclusiones</button></div>'
-    + '<p class="note" style="margin-top:8px">'+visitPeriodLabel()+'. Se incluirán <b>'+regs.length+'</b> registro(s) de emociones, <b>'+dia.length+'</b> entrada(s) de diario y <b>'+pend.length+'</b> nota(s) de los padres.</p>'
-    + '<div class="row"><button class="btn btn-primary" onclick="downloadVisitPDF()">⬇️ Descargar informe</button><button class="btn btn-ghost" onclick="copyReport()">📋 Copiar</button></div>'
+    + '<p class="note" style="margin-top:0">'+visitPeriodLabel()+'. Se incluirán <b>'+regs.length+'</b> registro(s) de emociones, <b>'+dia.length+'</b> entrada(s) de diario y <b>'+pend.length+'</b> nota(s) de los padres.</p>'
+    + '<div class="row"><button class="btn btn-primary" onclick="downloadVisitWord()">⬇️ Word (editable)</button><button class="btn btn-primary" onclick="downloadVisitPDF()">⬇️ PDF</button><button class="btn btn-ghost" onclick="copyReport()">📋 Copiar</button></div>'
+    + '<p class="note" style="margin-top:4px">El <b>Word</b> se puede corregir antes de entregarlo; el <b>PDF</b> queda listo para enviar.</p>'
     + '<div class="row" style="margin-top:10px"><button class="btn btn-ghost" onclick="markVisitDone()">✓ Marcar visita como hecha</button></div>'
-    + '<p class="note" style="text-align:center;margin-top:6px">Al marcarla, esta visita (con sus conclusiones) se guarda en el historial, el informe se pone a cero para la próxima y las notas de los padres pasan al histórico.</p>'
+    + '<p class="note" style="text-align:center;margin-top:6px">Al marcarla, el informe se pone a cero para la próxima visita y las notas de los padres pasan al histórico.</p>'
     + '</div>'
     + '<div class="report" style="margin-top:16px"><h3 style="font-size:15px;margin-bottom:10px">Notas de los padres</h3>'+notasBlock+'</div>'
     + '<div class="report" style="margin-top:16px"><h3 style="font-size:15px;margin-bottom:10px">Registros de emociones del niño</h3>'+regsBlock+'</div>'
-    + '<div class="report" style="margin-top:16px"><h3 style="font-size:15px;margin-bottom:10px">Diario del niño</h3>'+diaBlock+'</div>'
-    + '<div class="report" style="margin-top:16px"><h3 style="font-size:15px;margin-bottom:10px">Visitas anteriores ('+hist.length+')</h3>'+histBlock+'</div>';
+    + '<div class="report" style="margin-top:16px"><h3 style="font-size:15px;margin-bottom:10px">Diario del niño</h3>'+diaBlock+'</div>';
 }
 function entryHTML(e){
   const emos=e.emociones.map(emoName).join(', ')||'—';
@@ -581,71 +578,38 @@ function reportText(){
       var cuerpo=e.cuerpo.map(function(id){var c=CUERPO.find(function(x){return x.id===id;});return c?c.label:id;}).join(', ');
       t+='\n• '+fmtDateTime(e.ts)+' (intensidad '+e.intensidad+'/5)\n  Emoción: '+(emos||'—')+'\n  Qué pasó: '+(e.detonante||'—')+(e.tags.length?' ['+e.tags.join(', ')+']':'')+'\n';
       if(e.contexto)t+='  Cómo fue: '+e.contexto+'\n';
-      if(cuerpo)t+='  Dónde lo siente: '+cuerpo+'\n'; }); }
+      if(cuerpo)t+='  Cuerpo: '+cuerpo+'\n'; }); }
   else { t+='  El niño no ha registrado ninguna emoción en este periodo.\n'; }
   t+='\nDIARIO DEL NIÑO:\n';
   if(dia.length){ dia.forEach(function(d){ t+='\n• '+fmtDateTime(d.ts)+'\n  '+(d.text||'')+'\n'; }); }
   else { t+='  El niño no ha escrito nada en el diario en este periodo.\n'; }
-  t+='\nCONCLUSIONES DE LA SESIÓN (MAMEN):\n';
-  if(state.visitConclusions&&state.visitConclusions.trim()){ t+='  '+state.visitConclusions.trim()+'\n'; }
-  else { t+='  Pendiente de la sesión con Mamen.\n'; }
   return t;
 }
 function copyReport(){ const txt=reportText(); if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(()=>toast('Informe copiado ✓')).catch(()=>fallbackCopy(txt)); else fallbackCopy(txt); }
 function fallbackCopy(txt){ const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');toast('Informe copiado ✓');}catch(e){toast('Selecciona y copia el texto');}document.body.removeChild(ta); }
-/* ===== Informe de la visita (notas + emociones + diario + conclusiones de Mamen) ===== */
-var visitDateStr='';
-function setVisitDate(v){ var el=document.getElementById('visitConcl'); if(el) state.visitConclusions=el.value; visitDateStr=v||todayKey(); renderParentBody(); }
-function visitInputVal(){ return visitDateStr||todayKey(); }
-function fmtDMY(d){ if(!d) return '—'; var s=(String(d).length<=10)?(d+'T12:00:00'):d; var x=new Date(s); return isNaN(x.getTime())?String(d):x.toLocaleDateString('es-ES'); }
-function fmtDMYlong(d){ var s=(String(d).length<=10)?(d+'T12:00:00'):d; var x=new Date(s); return isNaN(x.getTime())?String(d):x.toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'}); }
-function visitDateLabel(){ return fmtDMYlong(visitInputVal()); }
-function periodLabelFor(since,dateStr){ var hi=fmtDMY(dateStr); if(since){ return 'Desde la visita anterior ('+fmtDMY(since)+') hasta el '+hi; } return 'Todo lo registrado hasta el '+hi+' (primera visita)'; }
-function visitPeriodLabel(){ return periodLabelFor(state.lastVisit||'', visitInputVal()); }
-function windowItems(arr,sinceISO,endStr){ var lo=sinceISO?new Date(sinceISO).getTime():0; var hi=new Date((endStr||todayKey())+'T23:59:59').getTime();
-  return (arr||[]).filter(function(x){var t=new Date(x.ts).getTime();return t>lo&&t<=hi;}).slice().sort(function(a,b){return new Date(a.ts)-new Date(b.ts);}); }
-function visitEntries(){ return windowItems(state.entries, state.lastVisit||'', visitInputVal()); }
-function visitDiario(){ return windowItems(state.diario, state.lastVisit||'', visitInputVal()); }
-function visitEndTime(){ return new Date(visitInputVal()+'T23:59:59').getTime(); }
-function saveVisitConcl(){ var el=document.getElementById('visitConcl'); if(el) state.visitConclusions=el.value; pushConfig(); toast('Conclusiones guardadas ✓'); }
-function markVisitDone(){
-  var el=document.getElementById('visitConcl'); if(el) state.visitConclusions=el.value;
-  if(!window._visitArmed){ window._visitArmed=true; toast('Pulsa otra vez para confirmar'); setTimeout(function(){window._visitArmed=false;},3000); return; }
-  window._visitArmed=false;
-  var closedTs=new Date().toISOString();
-  if(!Array.isArray(state.visits)) state.visits=[];
-  state.visits.unshift({ fecha:visitInputVal(), since:state.lastVisit||'', conclusiones:state.visitConclusions||'', closedTs:closedTs });
-  state.lastVisit=new Date(visitEndTime()).toISOString();
-  state.notas.forEach(function(n){ if(!n.delivered) n.delivered=closedTs; });
-  state.visitConclusions='';
-  pushConfig(); pushNotas(); renderParent(); toast('Visita guardada ✓');
-}
-
-function buildVisitPDF(spec){
+function downloadVisitPDF(){
   if(!(window.jspdf&&window.jspdf.jsPDF)){ toast('No se pudo cargar el generador de PDF'); return; }
-  var m=emoMap(), now=new Date();
-  var regs=windowItems(state.entries, spec.since, spec.dateStr);
-  var dia=windowItems(state.diario, spec.since, spec.dateStr);
-  var notas=spec.notas||[];
+  var pend=pendingNotas(), regs=visitEntries(), dia=visitDiario(), m=emoMap(), now=new Date();
   var doc=new window.jspdf.jsPDF({unit:'pt',format:'a4'});
   var W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight(); var ML=48,MR=W-48,MB=H-56; var y=64;
   var AC=[47,111,109];
   function brk(pts){ if(y+pts>MB){ doc.addPage(); y=64; } }
+  /* cabecera con color + logo */
   doc.setFont('helvetica','bold'); doc.setFontSize(15);
-  var title='Información para visita del día '+fmtDMYlong(spec.dateStr)+' con Mamen';
+  var title='Información para visita del día '+visitDateLabel()+' con Mamen';
   var titleX=ML+66, titleW=MR-titleX;
   var tlines=doc.splitTextToSize(title,titleW);
   var bandH=Math.max(94, 28+tlines.length*19+14);
   doc.setFillColor(AC[0],AC[1],AC[2]); doc.rect(0,0,W,bandH,'F');
   doc.setFillColor(242,200,91); doc.rect(0,bandH,W,5,'F');
   doc.setFillColor(255,255,255); doc.roundedRect(ML,(bandH-50)/2,50,50,10,10,'F');
-  try{ doc.addImage(LOGO_PDF,'PNG',ML+5,(bandH-50)/2+5,40,40,'logo','FAST'); }catch(e){}
+  try{ doc.addImage(LOGO_PDF,'PNG',ML+5,(bandH-50)/2+5,40,40); }catch(e){}
   doc.setTextColor(255,255,255);
   var ty=(bandH-tlines.length*19)/2+14; tlines.forEach(function(l){ doc.text(l,titleX,ty); ty+=19; });
   y=bandH+30;
   doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.setTextColor(90,105,100);
   doc.text('Niño/a: '+(state.nombre||'—'),ML,y); y+=15;
-  var pl=doc.splitTextToSize(periodLabelFor(spec.since,spec.dateStr),MR-ML); pl.forEach(function(l){ doc.text(l,ML,y); y+=15; }); y+=8;
+  var pl=doc.splitTextToSize(visitPeriodLabel(),MR-ML); pl.forEach(function(l){ doc.text(l,ML,y); y+=15; }); y+=8;
   function section(label){ brk(42); y+=6; doc.setFillColor(AC[0],AC[1],AC[2]); doc.roundedRect(ML,y-11,6,16,2,2,'F');
     doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(30,45,44); doc.text(label,ML+14,y+2); y+=14;
     doc.setDrawColor(220,228,224); doc.line(ML,y,MR,y); y+=14; }
@@ -653,23 +617,20 @@ function buildVisitPDF(spec){
     var l=doc.splitTextToSize(txt,MR-ML); l.forEach(function(t){ brk(14); doc.text(t,ML,y); y+=14; }); y+=6; doc.setFont('helvetica','normal'); }
   /* notas de los padres (SIN fecha) */
   section('Notas de los padres');
-  if(notas.length){ notas.forEach(function(n){ brk(24);
+  if(pend.length){ pend.slice().reverse().forEach(function(n){ brk(24);
       doc.setFillColor(AC[0],AC[1],AC[2]); doc.circle(ML+3,y-3,1.6,'F');
       doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.setTextColor(45,55,54);
       var l=doc.splitTextToSize(n.text||'',MR-ML-14); l.forEach(function(t){ brk(14); doc.text(t,ML+14,y); y+=14; }); y+=6; }); }
   else { empty('No hay notas de los padres para esta visita.'); }
-  /* registros de emociones (CON fecha y emojis) */
+  /* registros de emociones (CON fecha y hora) */
   y+=6; section('Registros de emociones del niño');
-  if(regs.length){ regs.forEach(function(e){ brk(72);
-      doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(20,45,35); doc.text(fmtDateTime(e.ts)+'  ·  Intensidad '+e.intensidad+'/5',ML,y); y+=16;
-      doc.setFont('helvetica','normal'); doc.setFontSize(10.5); doc.setTextColor(50,60,55);
+  if(regs.length){ regs.forEach(function(e){ brk(60);
       var emos=e.emociones.map(function(id){return m[id]?m[id].name:id;}).join(', ')||'—';
       var cuerpo=e.cuerpo.map(function(id){var c=CUERPO.find(function(x){return x.id===id;});return c?c.label:id;}).join(', ');
+      doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(20,45,35); doc.text(fmtDateTime(e.ts)+'  ·  Intensidad '+e.intensidad+'/5',ML,y); y+=15;
+      doc.setFont('helvetica','normal'); doc.setTextColor(50,60,55);
       var put=function(label,val){ if(!val)return; var txt=doc.splitTextToSize(label+' '+val,MR-ML); txt.forEach(function(t){ brk(14); doc.text(t,ML,y); y+=14; }); };
-      put('Emoción:',emos);
-      put('Qué pasó:',(e.detonante||'—')+(e.tags.length?' ['+e.tags.join(', ')+']':''));
-      put('Cómo fue:',e.contexto);
-      put('Dónde lo siente:',cuerpo);
+      put('Emoción:',emos); put('Qué pasó:',(e.detonante||'—')+(e.tags.length?' ['+e.tags.join(', ')+']':'')); put('Cómo fue:',e.contexto); put('Cuerpo:',cuerpo);
       doc.setDrawColor(235,240,232); brk(8); doc.line(ML,y,MR,y); y+=8; }); }
   else { empty('El niño no ha registrado ninguna emoción en este periodo.'); }
   /* diario (CON fecha y hora) */
@@ -680,24 +641,91 @@ function buildVisitPDF(spec){
       var txt=doc.splitTextToSize(d.text||'',MR-ML); txt.forEach(function(t){ brk(14); doc.text(t,ML,y); y+=14; });
       y+=6; doc.setDrawColor(235,240,232); brk(8); doc.line(ML,y,MR,y); y+=8; }); }
   else { empty('El niño no ha escrito nada en el diario en este periodo.'); }
-  /* conclusiones de Mamen */
-  y+=6; section('Conclusiones de la sesión (Mamen)');
-  if(spec.conclusiones && spec.conclusiones.trim()){ doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.setTextColor(45,55,54);
-      var cl=doc.splitTextToSize(spec.conclusiones.trim(),MR-ML); cl.forEach(function(t){ brk(14); doc.text(t,ML,y); y+=14; }); }
-  else { empty('Pendiente de la sesión con Mamen.'); }
   /* pie */
   var total=doc.internal.getNumberOfPages();
   for(var p=1;p<=total;p++){ doc.setPage(p); doc.setFontSize(8); doc.setTextColor(150,160,152);
     doc.text('Isla de las Emociones — generado el '+now.toLocaleDateString('es-ES'),ML,H-30); doc.text('Página '+p+' de '+total,MR-70,H-30); }
-  var fname='informe_visita_'+((state.nombre||'nino').trim().replace(/\s+/g,'_')||'nino')+'_'+(spec.dateStr||todayKey())+'.pdf';
+  var fname='informe_visita_'+((state.nombre||'nino').trim().replace(/\s+/g,'_')||'nino')+'_'+visitInputVal()+'.pdf';
   try{ doc.save(fname); toast('PDF generado ✓'); }catch(e){ toast('Aquí no se puede descargar; abre la app en el navegador'); }
 }
+/* Informe en WORD (editable): mismo contenido que el PDF, en un archivo .doc
+   que se abre en Word, LibreOffice o Google Docs para corregirlo antes de entregarlo. */
+function downloadVisitWord(){
+  var pend=pendingNotas(), regs=visitEntries(), dia=visitDiario(), m=emoMap(), now=new Date();
+  var AC='#2F6F6D';
+  function w(s){ return esc(s==null?'':String(s)); }              /* escapa HTML */
+  function multi(s){ return w(s).replace(/\n/g,'<br>'); }          /* respeta saltos de línea */
+  function emptyP(txt){ return '<p style="margin:0;font-style:italic;color:#7a8a86">'+w(txt)+'</p>'; }
+  function sec(t){ return '<p style="margin:16pt 0 6pt 0;font-size:13pt;color:'+AC+'"><b>'+w(t)+'</b></p>'; }
+  /* Notas de los padres (SIN fecha, como en el PDF) */
+  var notasHtml = pend.length
+    ? pend.slice().reverse().map(function(n){ return '<p style="margin:0 0 8pt 0">•&nbsp;'+multi(n.text)+'</p>'; }).join('')
+    : emptyP('No hay notas de los padres para esta visita.');
+  /* Registros de emociones (CON fecha y hora) */
+  var regsHtml = regs.length ? regs.map(function(e){
+      var emos=e.emociones.map(function(id){return m[id]?m[id].name:id;}).join(', ')||'—';
+      var cuerpo=e.cuerpo.map(function(id){var c=CUERPO.find(function(x){return x.id===id;});return c?c.label:id;}).join(', ');
+      var h='<p style="margin:0 0 2pt 0"><b>'+w(fmtDateTime(e.ts))+' · Intensidad '+e.intensidad+'/5</b></p>';
+      h+='<p style="margin:0">Emoción: '+w(emos)+'</p>';
+      h+='<p style="margin:0">Qué pasó: '+w((e.detonante||'—')+(e.tags.length?' ['+e.tags.join(', ')+']':''))+'</p>';
+      if(e.contexto)h+='<p style="margin:0">Cómo fue: '+w(e.contexto)+'</p>';
+      if(cuerpo)h+='<p style="margin:0">Cuerpo: '+w(cuerpo)+'</p>';
+      return h+'<p style="margin:0 0 10pt 0;border-bottom:1px solid #e0e0e0;font-size:1pt">&nbsp;</p>';
+    }).join('') : emptyP('El niño no ha registrado ninguna emoción en este periodo.');
+  /* Diario (CON fecha y hora) */
+  var diaHtml = dia.length ? dia.map(function(d){
+      return '<p style="margin:0 0 2pt 0"><b>'+w(fmtDateTime(d.ts))+'</b></p>'
+           + '<p style="margin:0 0 10pt 0">'+multi(d.text)+'</p>';
+    }).join('') : emptyP('El niño no ha escrito nada en el diario en este periodo.');
+  var title='Información para visita del día '+visitDateLabel()+' con Mamen';
+  var body =
+      '<table style="width:100%;border-collapse:collapse"><tr>'
+    +   '<td style="background:'+AC+';padding:12pt;width:60pt;vertical-align:middle">'
+    +     '<img src="'+LOGO_PDF+'" width="46" height="46" style="display:block"></td>'
+    +   '<td style="background:'+AC+';padding:12pt;vertical-align:middle;color:#ffffff;font-size:15pt"><b>'+w(title)+'</b></td>'
+    + '</tr></table>'
+    + '<div style="height:4pt;background:#F2C85B;font-size:1pt">&nbsp;</div>'
+    + '<p style="margin:12pt 0 0 0;color:#5a6964">Niño/a: '+w(state.nombre||'—')+'</p>'
+    + '<p style="margin:0;color:#5a6964">'+w(visitPeriodLabel())+'</p>'
+    + sec('Notas de los padres') + notasHtml
+    + sec('Registros de emociones del niño') + regsHtml
+    + sec('Diario del niño') + diaHtml
+    + '<p style="margin-top:18pt;font-size:8pt;color:#9aa6a3">Isla de las Emociones — generado el '+w(now.toLocaleDateString('es-ES'))+'</p>';
+  var html =
+      '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">'
+    + '<head><meta charset="utf-8">'
+    + '<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->'
+    + '<style>@page{size:A4;margin:2cm} body{font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#293B3A}</style>'
+    + '</head><body>'+body+'</body></html>';
+  var fname='informe_visita_'+((state.nombre||'nino').trim().replace(/\s+/g,'_')||'nino')+'_'+visitInputVal()+'.doc';
+  try{
+    var blob=new Blob(['﻿'+html],{type:'application/msword'});
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=fname;
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },1500);
+    toast('Word generado ✓');
+  }catch(e){ toast('Aquí no se puede descargar; abre la app en el navegador'); }
+}
 
-function downloadVisitPDF(){ var el=document.getElementById('visitConcl'); if(el) state.visitConclusions=el.value;
-  buildVisitPDF({ dateStr:visitInputVal(), since:state.lastVisit||'', notas:pendingNotas().slice().sort(function(a,b){return new Date(a.ts)-new Date(b.ts);}), conclusiones:state.visitConclusions||'' }); }
-function reprintVisit(i){ var v=(state.visits||[])[i]; if(!v){ toast('No encuentro esa visita'); return; }
-  var notas=state.notas.filter(function(n){return n.delivered===v.closedTs;}).slice().sort(function(a,b){return new Date(a.ts)-new Date(b.ts);});
-  buildVisitPDF({ dateStr:v.fecha, since:v.since||'', notas:notas, conclusiones:v.conclusiones||'' }); }
+/* ---- Helpers del informe de visita ---- */
+var visitDateStr='';
+function setVisitDate(v){ visitDateStr=v||todayKey(); renderParentBody(); }
+function visitInputVal(){ return visitDateStr||todayKey(); }
+function visitEndTime(){ return new Date(visitInputVal()+'T23:59:59').getTime(); }
+function visitSinceTime(){ return state.lastVisit?new Date(state.lastVisit).getTime():0; }
+function visitEntries(){ var lo=visitSinceTime(),hi=visitEndTime(); return state.entries.filter(function(e){var t=new Date(e.ts).getTime();return t>lo&&t<=hi;}).slice().sort(function(a,b){return new Date(a.ts)-new Date(b.ts);}); }
+function visitDiario(){ var lo=visitSinceTime(),hi=visitEndTime(); return state.diario.filter(function(d){var t=new Date(d.ts).getTime();return t>lo&&t<=hi;}).slice().sort(function(a,b){return new Date(a.ts)-new Date(b.ts);}); }
+function visitDateLabel(){ var d=new Date(visitInputVal()+'T12:00:00'); return d.toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'}); }
+function visitPeriodLabel(){ var hi=new Date(visitInputVal()+'T12:00:00').toLocaleDateString('es-ES');
+  if(state.lastVisit){ var lo=new Date(state.lastVisit).toLocaleDateString('es-ES'); return 'Desde la visita anterior ('+lo+') hasta el '+hi; }
+  return 'Todo lo registrado hasta el '+hi+' (primera visita)'; }
+function markVisitDone(){
+  if(!window._visitArmed){ window._visitArmed=true; toast('Pulsa otra vez para confirmar'); setTimeout(function(){window._visitArmed=false;},3000); return; }
+  window._visitArmed=false;
+  state.lastVisit=new Date(visitEndTime()).toISOString();
+  var now=new Date().toISOString(); state.notas.forEach(function(n){ if(!n.delivered) n.delivered=now; });
+  pushConfig(); pushNotas(); renderParent(); toast('Visita marcada como hecha ✓');
+}
 
 /* ---- Notas de los padres (oculto al niño) ---- */
 let notasView='actuales';
@@ -951,6 +979,14 @@ async function wipeData(){ if(!window._wipeArmed){ window._wipeArmed=true; toast
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden && API && (view.name==='home'||view.name==='learnList'||view.name==='miDiario')){ api('load').then(s=>{ state=normalize(s); cacheState(); if(view.name==='home')renderHome(); else if(view.name==='learnList')renderLearnList(); else if(view.name==='miDiario')renderMiDiario(); }).catch(()=>{}); } });
 
 boot();
+
+/* PWA: registrar el service worker para que la app sea instalable.
+   Se busca junto a index.html; silencioso si el navegador no lo soporta. */
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').catch(function(){ /* sin instalación, la web sigue funcionando */ });
+  });
+}
 </script>
 
 </body>
